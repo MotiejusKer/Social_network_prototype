@@ -1,0 +1,234 @@
+<?php
+session_start();
+
+if (!isset($_SESSION['user'])) {
+    echo "<script>window.location.href = 'index.php';</script>";
+    exit();
+}
+
+$currentUser = $_SESSION['user'];
+
+function getUsers() {
+    $files = ['ekspertai.txt', 'investuotojai.txt', 'startup.txt'];
+    $users = [];
+
+    foreach ($files as $file) {
+        if (file_exists($file)) {
+            $content = file_get_contents($file);
+            $entries = explode('---', $content);
+
+            foreach ($entries as $entry) {
+                if (preg_match('/Vardas: (.*)/', $entry, $nameMatch)) {
+                    $users[] = trim($nameMatch[1]);
+                }
+            }
+        }
+    }
+
+    return $users;
+}
+
+function saveMessage($from, $to, $message) {
+    $file = 'zinutes.txt';
+    $entry = "Nuo: $from\nKam: $to\nŽinutė: $message\n---\n";
+    file_put_contents($file, $entry, FILE_APPEND);
+}
+
+function getMessages($currentUser, $otherUser) {
+    $file = 'zinutes.txt';
+    $messages = [];
+
+    if (file_exists($file)) {
+        $content = file_get_contents($file);
+        $entries = explode('---', $content);
+
+        foreach ($entries as $entry) {
+            if (
+                preg_match('/Nuo: (.*)/', $entry, $fromMatch) &&
+                preg_match('/Kam: (.*)/', $entry, $toMatch) &&
+                preg_match('/Žinutė: (.*)/s', $entry, $messageMatch)
+            ) {
+                $from = trim($fromMatch[1]);
+                $to = trim($toMatch[1]);
+                $message = trim($messageMatch[1]);
+
+                if (($from === $currentUser && $to === $otherUser) || ($from === $otherUser && $to === $currentUser)) {
+                    $messages[] = [
+                        'from' => $from,
+                        'to' => $to,
+                        'message' => $message,
+                    ];
+                }
+            }
+        }
+    }
+
+    return $messages;
+}
+
+$users = getUsers();
+$selectedUser = isset($_GET['user']) ? $_GET['user'] : null;
+$messages = $selectedUser ? getMessages($currentUser, $selectedUser) : [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selectedUser) {
+    $message = $_POST['message'];
+    saveMessage($currentUser, $selectedUser, $message);
+    header("Location: forumas.php?user=$selectedUser");
+    exit();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forumas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 25%;
+            background-color: #f4f4f4;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .sidebar h2 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .sidebar ul li {
+            margin: 10px 0;
+        }
+
+        .sidebar ul li a {
+            text-decoration: none;
+            color: #333;
+            display: block;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar ul li a:hover {
+            background-color: #ddd;
+        }
+
+        .chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+
+        .chat-messages .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .chat-messages .message.sent {
+            background-color: #d1e7dd;
+            text-align: right;
+        }
+
+        .chat-messages .message.received {
+            background-color: #f8d7da;
+            text-align: left;
+        }
+
+        .chat-input {
+            padding: 10px;
+            background-color: #f4f4f4;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input textarea {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: none;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        .chat-input button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Vartotojai</h2>
+        <ul>
+            <?php foreach ($users as $user): ?>
+                <?php if ($user !== $currentUser): ?>
+                    <li><a href="forumas.php?user=<?= urlencode($user) ?>"><?= htmlspecialchars($user) ?></a></li>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+
+    <div class="chat">
+        <?php if ($selectedUser): ?>
+            <div class="chat-header">
+                Susirašinėjimas su: <?= htmlspecialchars($selectedUser) ?>
+            </div>
+            <div class="chat-messages">
+                <?php foreach ($messages as $msg): ?>
+                    <div class="message <?= $msg['from'] === $currentUser ? 'sent' : 'received' ?>">
+                        <strong><?= htmlspecialchars($msg['from']) ?>:</strong>
+                        <p><?= htmlspecialchars($msg['message']) ?></p>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <form method="POST" class="chat-input">
+                <textarea name="message" placeholder="Įrašykite žinutę..." required></textarea>
+                <button type="submit">Siųsti</button>
+            </form>
+        <?php else: ?>
+            <div class="chat-header">
+                Pasirinkite vartotoją iš sąrašo
+            </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
