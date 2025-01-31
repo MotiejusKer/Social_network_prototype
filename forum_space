@@ -1,0 +1,135 @@
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name = htmlspecialchars($_POST['V'] ?? '');
+    $email = htmlspecialchars($_POST['elpastas'] ?? '');
+    $idea = htmlspecialchars($_POST['idea'] ?? '');
+    $type = $_POST['type'] ?? '';
+    $password = htmlspecialchars($_POST['S'] ?? '');
+
+    if ($name && $email && $idea && $password && $type) {
+        $filename = '';
+        if ($type === 'startup') {
+            $filename = 'startup.txt';
+        } elseif ($type === 'investuotojas') {
+            $filename = 'investuotojai.txt';
+        } elseif ($type === 'ekspertas') {
+            $filename = 'ekspertai.txt';
+        }
+
+        if ($filename && file_exists($filename)) {
+            $fileContents = file_get_contents($filename);
+            if (strpos($fileContents, "El. paštas: $email") !== false) {
+                die("<div class='error'>Klaida: vartotojas su šiuo el. pašto adresu jau yra užregistruotas.</div>");
+            }
+        }
+
+        $data = "Vardas: $name\nEl. paštas: $email\nSlaptažodis: $password\n";
+        if ($type === 'startup') {
+            $data .= "Verslo idėja: $idea\n---\n";
+        } elseif ($type === 'investuotojas') {
+            $data .= "Investavimo sritys: $idea\n---\n";
+        } elseif ($type === 'ekspertas') {
+            $data .= "Ekspertizė: $idea\n---\n";
+        }
+        file_put_contents($filename, $data, FILE_APPEND);
+    }
+}
+
+function displayFile($filename, $title) {
+    if (file_exists($filename)) {
+        echo "<h2>$title</h2>";
+        $lines = file($filename);
+        echo '<div class="card-container">';
+        $userBlock = "";
+        $userName = "";  // Kintamasis, kuris laikys vartotojo vardą ar el. paštą
+        foreach ($lines as $line) {
+            if (trim($line) === "---") {
+                // Pridedame nuorodą į chat.php su vartotojo vardu (arba el. paštu)
+                if ($userName) {
+                    echo "<div class='card'>
+                            <a href='chat.php?user=" . urlencode($userName) . "'>Pokalbis su $userName</a>
+                            $userBlock
+                          </div>";
+                }
+                $userBlock = "";
+                $userName = "";  // Resetiname vartotojo vardą
+            } elseif (strpos($line, 'Vardas: ') === 0) {
+                // Išskiriame vartotojo vardą arba el. paštą
+                $userName = substr($line, 7);  // Paimame tik vardą, kuris prasideda nuo 'Vardas: '
+                $userBlock .= htmlspecialchars($line) . "<br>";
+            } elseif (strpos($line, 'El. paštas: ') === 0) {
+                $userBlock .= htmlspecialchars($line) . "<br>";
+            } elseif (strpos($line, 'Slaptažodis') === false) {
+                $userBlock .= htmlspecialchars($line) . "<br>";
+            }
+        }
+        echo '</div>';
+    } else {
+        echo "<h2>$title</h2>";
+        echo "<p>Dar nėra duomenų.</p>";
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forumas</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+        h1, h2 {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .card-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            max-width: 320px;
+            text-align: left;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+        .card h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .card p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .error {
+            color: red;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vartotojai ir jų pateikti duomenys</h1>
+    <?php
+    // Display user data with a link to chat.php
+    displayFile('startup.txt', 'Idėjos autoriai');
+    displayFile('investuotojai.txt', 'Investuotojai');
+    displayFile('ekspertai.txt', 'Ekspertai');
+    ?>
+</body>
+</html>
